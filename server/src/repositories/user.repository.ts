@@ -14,6 +14,8 @@ import { asUuid } from 'src/utils/database';
 export interface UserListFilter {
   id?: string;
   withDeleted?: boolean;
+  /** Include accounts awaiting admin approval. Off by default so they stay out of user-facing lists. */
+  withPending?: boolean;
 }
 
 export interface UserStatsQueryResponse {
@@ -63,6 +65,16 @@ export class UserRepository {
       .select(['key', 'value'])
       .where('user_metadata.userId', '=', userId)
       .execute() as Promise<UserMetadataItem[]>;
+  }
+
+  async getMetadataByKey<T extends keyof UserMetadata>(userId: string, key: T) {
+    const item = await this.db
+      .selectFrom('user_metadata')
+      .select(['value'])
+      .where('user_metadata.userId', '=', userId)
+      .where('user_metadata.key', '=', key)
+      .executeTakeFirst();
+    return item?.value as UserMetadata[T] | undefined;
   }
 
   @GenerateSql()
@@ -160,12 +172,13 @@ export class UserRepository {
     { name: 'with deleted', params: [{ withDeleted: true }] },
     { name: 'without deleted', params: [{ withDeleted: false }] },
   )
-  getList({ id, withDeleted }: UserListFilter = {}) {
+  getList({ id, withDeleted, withPending }: UserListFilter = {}) {
     return this.db
       .selectFrom('user')
       .select(columns.userAdmin)
       .select(withMetadata)
       .$if(!withDeleted, (eb) => eb.where('user.deletedAt', 'is', null))
+      .$if(!withPending, (eb) => eb.where('user.status', '!=', UserStatus.Pending))
       .$if(!!id, (eb) => eb.where('user.id', '=', id!))
       .orderBy('createdAt', 'desc')
       .execute();

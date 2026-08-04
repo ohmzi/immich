@@ -79,6 +79,12 @@ export class SystemConfigService extends BaseService {
     if (logLevel && !_.isEqual(toPlainObject(newConfig.logging), oldConfig.logging)) {
       throw new Error('Logging cannot be changed while the environment variable IMMICH_LOG_LEVEL is set.');
     }
+
+    // Sign-up creates password-backed accounts, so it would otherwise be possible to accept
+    // registrations that can never log in.
+    if (newConfig.signUp.enabled && !newConfig.passwordLogin.enabled) {
+      throw new Error('Sign up cannot be enabled while password login is disabled.');
+    }
   }
 
   async updateAdminConfig(dto: AdminConfigDto): Promise<AdminConfigDto> {

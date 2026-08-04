@@ -270,6 +270,8 @@ select
   ) as "metadata"
 from
   "user"
+where
+  "user"."status" != $1
 order by
   "createdAt" desc
 
@@ -311,6 +313,7 @@ from
   "user"
 where
   "user"."deletedAt" is null
+  and "user"."status" != $1
 order by
   "createdAt" desc
 

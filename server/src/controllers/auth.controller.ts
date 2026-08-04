@@ -14,6 +14,7 @@ import {
   PinCodeSetupDto,
   SessionUnlockDto,
   SignUpDto,
+  SignUpResponseDto,
   ValidateAccessTokenResponseDto,
 } from 'src/dtos/auth.dto';
 import { UserAdminResponseDto } from 'src/dtos/user.dto';
@@ -59,6 +60,19 @@ export class AuthController {
   @Authenticated({ public: true, setup: true })
   signUpAdmin(@Body() dto: SignUpDto): Promise<UserAdminResponseDto> {
     return this.service.adminSignUp(dto);
+  }
+
+  // Deliberately does not set a session cookie — the account is created pending approval
+  // and cannot log in yet.
+  @Post('sign-up')
+  @Endpoint({
+    summary: 'Sign up',
+    description: 'Register a new account, pending administrator approval.',
+    history: new HistoryBuilder().added('v3.1.0'),
+  })
+  @Authenticated({ public: true })
+  signUp(@Body() dto: SignUpDto, @GetLoginDetails() loginDetails: LoginDetails): Promise<SignUpResponseDto> {
+    return this.service.signUp(dto, loginDetails);
   }
 
   @Post('validateToken')

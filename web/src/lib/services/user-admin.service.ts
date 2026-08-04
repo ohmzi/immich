@@ -1,6 +1,8 @@
 import {
+  approveUserAdmin,
   createUserAdmin,
   deleteUserAdmin,
+  rejectUserAdmin,
   restoreUserAdmin,
   updateUserAdmin,
   UserStatus,
@@ -11,6 +13,8 @@ import {
 } from '@immich/sdk';
 import { modalManager, toastManager, type ActionItem } from '@immich/ui';
 import {
+  mdiAccountCancelOutline,
+  mdiAccountCheckOutline,
   mdiDeleteRestore,
   mdiInformationOutline,
   mdiLockReset,
@@ -61,10 +65,26 @@ export const getUserAdminActions = ($t: MessageFormatter, user: UserAdminRespons
     icon: mdiTrashCanOutline,
     title: $t('delete'),
     color: 'danger',
-    $if: () => authManager.user.id !== user.id && !user.deletedAt,
+    // a pending account is rejected, not deleted — soft-deleting one would strand it
+    $if: () => authManager.user.id !== user.id && !user.deletedAt && user.status !== UserStatus.Pending,
     onAction: () => modalManager.show(UserDeleteConfirmModal, { user }),
     shortcuts: { key: 'Backspace' },
     shortcutOptions: { ignoreInputFields: true },
+  };
+
+  const Approve: ActionItem = {
+    icon: mdiAccountCheckOutline,
+    title: $t('admin.approve_user'),
+    $if: () => user.status === UserStatus.Pending,
+    onAction: () => handleApproveUserAdmin(user),
+  };
+
+  const Reject: ActionItem = {
+    icon: mdiAccountCancelOutline,
+    title: $t('admin.reject_user'),
+    color: 'danger',
+    $if: () => user.status === UserStatus.Pending,
+    onAction: () => handleRejectUserAdmin(user),
   };
 
   const getDeleteDate = (deletedAt: string): Date =>
@@ -84,17 +104,19 @@ export const getUserAdminActions = ($t: MessageFormatter, user: UserAdminRespons
   const ResetPassword: ActionItem = {
     icon: mdiLockReset,
     title: $t('reset_password'),
-    $if: () => authManager.user.id !== user.id,
+    // writing a password to a pending account would defeat the empty-password guard
+    $if: () => authManager.user.id !== user.id && user.status !== UserStatus.Pending,
     onAction: () => handleResetPasswordUserAdmin(user),
   };
 
   const ResetPinCode: ActionItem = {
     icon: mdiLockSmart,
     title: $t('reset_pin_code'),
+    $if: () => user.status !== UserStatus.Pending,
     onAction: () => handleResetPinCodeUserAdmin(user),
   };
 
-  return { Detail, Update, Delete, Restore, ResetPassword, ResetPinCode };
+  return { Detail, Update, Delete, Restore, ResetPassword, ResetPinCode, Approve, Reject };
 };
 
 export const handleCreateUserAdmin = async (dto: UserAdminCreateDto) => {
@@ -147,6 +169,46 @@ export const handleRestoreUserAdmin = async (user: UserAdminResponseDto) => {
     return true;
   } catch (error) {
     handleError(error, $t('errors.unable_to_restore_user'));
+    return false;
+  }
+};
+
+export const handleApproveUserAdmin = async (user: UserAdminResponseDto) => {
+  const $t = await getFormatter();
+
+  try {
+    const response = await approveUserAdmin({ id: user.id });
+    eventManager.emit('UserAdminUpdate', response);
+    toastManager.primary($t('admin.user_approved', { values: { user: user.name } }));
+    return true;
+  } catch (error) {
+    handleError(error, $t('errors.unable_to_approve_user'));
+    return false;
+  }
+};
+
+export const handleRejectUserAdmin = async (user: UserAdminResponseDto) => {
+  const $t = await getFormatter();
+  const confirmed = await modalManager.showDialog({
+    icon: mdiAccountCancelOutline,
+    title: $t('admin.reject_user'),
+    prompt: $t('admin.confirm_user_reject', { values: { user: user.name, email: user.email } }),
+    confirmText: $t('admin.reject_user'),
+    confirmColor: 'danger',
+  });
+  if (!confirmed) {
+    return false;
+  }
+
+  try {
+    await rejectUserAdmin({ id: user.id });
+    // hard delete, so the row is gone — 'UserAdminDelete' would only update it in place
+    // (that event models Immich's soft delete) and leave a stale row you could re-reject.
+    eventManager.emit('UserAdminDeleted', { id: user.id });
+    toastManager.primary($t('admin.user_rejected', { values: { user: user.name } }));
+    return true;
+  } catch (error) {
+    handleError(error, $t('errors.unable_to_reject_user'));
     return false;
   }
 };

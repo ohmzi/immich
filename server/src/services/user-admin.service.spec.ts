@@ -1,6 +1,6 @@
 import { BadRequestException, ForbiddenException } from '@nestjs/common';
 import { mapUserAdmin } from 'src/dtos/user.dto';
-import { JobName, UserStatus } from 'src/enum';
+import { JobName, UserMetadataKey, UserStatus } from 'src/enum';
 import { UserAdminService } from 'src/services/user-admin.service';
 import { AuthFactory } from 'test/factories/auth.factory';
 import { UserFactory } from 'test/factories/user.factory';
@@ -178,6 +178,57 @@ describe(UserAdminService.name, () => {
       mocks.user.restore.mockResolvedValue(userStub.user1);
       await expect(sut.restore(authStub.admin, userStub.user1.id)).resolves.toEqual(mapUserAdmin(userStub.user1));
       expect(mocks.user.restore).toHaveBeenCalledWith(userStub.user1.id);
+    });
+  });
+
+  describe('approve', () => {
+    it('should throw an error if the user is not pending', async () => {
+      mocks.user.get.mockResolvedValue(UserFactory.create({ status: UserStatus.Active }));
+
+      await expect(sut.approve(authStub.admin, userStub.user1.id)).rejects.toThrowError(BadRequestException);
+      expect(mocks.user.update).not.toHaveBeenCalled();
+    });
+
+    it('should promote the stored hash and activate the account', async () => {
+      const pending = UserFactory.create({ status: UserStatus.Pending, password: null });
+      const approved = UserFactory.create({ ...pending, status: UserStatus.Active });
+      mocks.user.get.mockResolvedValue(pending);
+      mocks.user.getMetadataByKey.mockResolvedValue({ hash: 'stored-hash' });
+      mocks.user.update.mockResolvedValue(approved);
+
+      await expect(sut.approve(authStub.admin, pending.id)).resolves.toEqual(mapUserAdmin(approved));
+
+      expect(mocks.user.update).toHaveBeenCalledWith(pending.id, {
+        status: UserStatus.Active,
+        password: 'stored-hash',
+      });
+      expect(mocks.user.deleteMetadata).toHaveBeenCalledWith(pending.id, UserMetadataKey.PendingPassword);
+    });
+
+    it('should refuse to approve an account whose credentials are missing', async () => {
+      mocks.user.get.mockResolvedValue(UserFactory.create({ status: UserStatus.Pending }));
+      mocks.user.getMetadataByKey.mockResolvedValue(void 0);
+
+      await expect(sut.approve(authStub.admin, userStub.user1.id)).rejects.toThrowError(BadRequestException);
+      expect(mocks.user.update).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('reject', () => {
+    it('should throw an error if the user is not pending', async () => {
+      mocks.user.get.mockResolvedValue(UserFactory.create({ status: UserStatus.Active }));
+
+      await expect(sut.reject(authStub.admin, userStub.user1.id)).rejects.toThrowError(BadRequestException);
+      expect(mocks.user.delete).not.toHaveBeenCalled();
+    });
+
+    it('should hard delete a pending account', async () => {
+      const pending = UserFactory.create({ status: UserStatus.Pending });
+      mocks.user.get.mockResolvedValue(pending);
+
+      await sut.reject(authStub.admin, pending.id);
+
+      expect(mocks.user.delete).toHaveBeenCalledWith({ id: pending.id }, true);
     });
   });
 });
