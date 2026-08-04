@@ -4,6 +4,7 @@ import { jsonObjectFrom } from 'kysely/helpers/postgres';
 import { InjectKysely } from 'nestjs-kysely';
 import { columns } from 'src/database';
 import { DummyValue, GenerateSql } from 'src/decorators';
+import { UserStatus } from 'src/enum';
 import { DB } from 'src/schema';
 import { ApiKeyTable } from 'src/schema/tables/api-key.table';
 import { asUuid } from 'src/utils/database';
@@ -41,7 +42,9 @@ export class ApiKeyRepository {
             .selectFrom('user')
             .select(columns.authUser)
             .whereRef('user.id', '=', 'api_key.userId')
-            .where('user.deletedAt', 'is', null),
+            .where('user.deletedAt', 'is', null)
+            // fail closed: only an active account may carry an API key
+            .where('user.status', '=', UserStatus.Active),
         ).as('user'),
       ])
       .where('api_key.key', '=', hashedToken)

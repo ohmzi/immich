@@ -194,4 +194,28 @@ export class UserAdminController {
   restoreUserAdmin(@Auth() auth: AuthDto, @Param() { id }: UUIDParamDto): Promise<UserAdminResponseDto> {
     return this.service.restore(auth, id);
   }
+
+  @Post(':id/approve')
+  @Authenticated({ permission: Permission.AdminUserUpdate, admin: true })
+  @HttpCode(HttpStatus.OK)
+  @Endpoint({
+    summary: 'Approve a pending user',
+    description: 'Approve a self sign-up account so that it can log in.',
+    history: new HistoryBuilder().added('v3.1.0'),
+  })
+  approveUserAdmin(@Auth() auth: AuthDto, @Param() { id }: UUIDParamDto): Promise<UserAdminResponseDto> {
+    return this.service.approve(auth, id);
+  }
+
+  @Post(':id/reject')
+  @Authenticated({ permission: Permission.AdminUserDelete, admin: true })
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @Endpoint({
+    summary: 'Reject a pending user',
+    description: 'Permanently delete a self sign-up account that is awaiting approval.',
+    history: new HistoryBuilder().added('v3.1.0'),
+  })
+  rejectUserAdmin(@Auth() auth: AuthDto, @Param() { id }: UUIDParamDto): Promise<void> {
+    return this.service.reject(auth, id);
+  }
 }

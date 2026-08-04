@@ -18,13 +18,24 @@ import {
   PinCodeSetupDto,
   SessionUnlockDto,
   SignUpDto,
+  SignUpResponseDto,
   mapLoginResponse,
 } from 'src/dtos/auth.dto';
 import { UserAdminResponseDto, mapUserAdmin } from 'src/dtos/user.dto';
-import { AuthType, ImmichCookie, ImmichHeader, ImmichQuery, JobName, Permission } from 'src/enum';
+import {
+  AuthType,
+  ImmichCookie,
+  ImmichHeader,
+  ImmichQuery,
+  JobName,
+  Permission,
+  UserMetadataKey,
+  UserStatus,
+} from 'src/enum';
 import { OAuthProfile } from 'src/repositories/oauth.repository';
 import { BaseService } from 'src/services/base.service';
 import { isGranted } from 'src/utils/access';
+import { PendingApprovalException } from 'src/utils/exceptions';
 import { HumanReadableSize } from 'src/utils/bytes';
 import { generateProfileImage } from 'src/utils/profile-image';
 import { getUserAgentDetails } from 'src/utils/request';
@@ -63,13 +74,25 @@ export class AuthService extends BaseService {
     }
 
     const user = await this.userRepository.getByEmail(dto.email, { withPassword: true });
+    // A pending sign-up keeps its hash in metadata so that `user.password` stays empty and the
+    // account cannot authenticate on any build. Validate against that hash instead.
+    const pending =
+      user?.status === UserStatus.Pending
+        ? await this.userRepository.getMetadataByKey(user.id, UserMetadataKey.PendingPassword)
+        : undefined;
+    const hash = pending?.hash || user?.password;
     // Always run bcrypt so response time is constant regardless of whether the email
     // is registered, preventing timing-based user enumeration.
-    const isAuthenticated = this.cryptoRepository.compareBcrypt(dto.password, user?.password ?? LOGIN_DUMMY_HASH);
+    const isAuthenticated = this.cryptoRepository.compareBcrypt(dto.password, hash || LOGIN_DUMMY_HASH);
 
-    if (!user || !user.password || !isAuthenticated) {
+    if (!user || !hash || !isAuthenticated) {
       this.logger.warn(`Failed login attempt for user ${dto.email} from ip address ${details.clientIp}`);
       throw new UnauthorizedException('Incorrect email or password');
+    }
+
+    // Credentials check out, but an admin has not approved the account yet.
+    if (user.status === UserStatus.Pending) {
+      throw new PendingApprovalException();
     }
 
     return this.createLoginResponse(user, details);
@@ -209,6 +232,43 @@ export class AuthService extends BaseService {
     });
 
     return mapUserAdmin(admin);
+  }
+
+  async signUp(dto: SignUpDto, details: LoginDetails): Promise<SignUpResponseDto> {
+    const { signUp } = await this.getConfig({ withCache: false });
+    if (!signUp.enabled) {
+      throw new BadRequestException('Sign up is disabled');
+    }
+
+    // This endpoint is unauthenticated, so leave a trail. `createUser` rejects a duplicate
+    // email with a distinct message, which is a deliberate usability-over-enumeration
+    // trade-off — see the feature notes.
+    this.logger.warn(`Sign up attempt for ${dto.email} from ip address ${details.clientIp}`);
+
+    // Hash here rather than letting `createUser` do it: the account is stored with a null
+    // `user.password` so it cannot authenticate under any build (upstream's login guard
+    // rejects a falsy password), and the real hash lives in metadata until an admin approves.
+    // Null rather than '' since v3.2.0's ConvertUserPasswordEmptyStringToNull migration made
+    // null the canonical "no password" value.
+    const hash = await this.cryptoRepository.hashBcrypt(dto.password, SALT_ROUNDS);
+
+    const user = await this.createUser({
+      isAdmin: false,
+      email: dto.email,
+      name: dto.name,
+      password: null,
+      status: UserStatus.Pending,
+      // they picked their own password moments ago; don't force a reset on first login
+      shouldChangePassword: false,
+      quotaSizeInBytes: signUp.defaultQuota === null ? null : signUp.defaultQuota * HumanReadableSize.GiB,
+    });
+
+    await this.userRepository.upsertMetadata(user.id, {
+      key: UserMetadataKey.PendingPassword,
+      value: { hash },
+    });
+
+    return { requiresApproval: true };
   }
 
   async authenticate({ headers, queryParams, metadata }: ValidateRequest): Promise<AuthDto> {
@@ -615,6 +675,12 @@ export class AuthService extends BaseService {
     oauthSid?: string,
     oauthBearerToken?: string,
   ) {
+    // Single choke point for both password and OAuth login: never mint a session for a
+    // non-active account, however that row came to exist.
+    if (user.status !== UserStatus.Active) {
+      throw new UnauthorizedException('Account is not active');
+    }
+
     const token = this.cryptoRepository.randomBytesAsText(32);
     const hashed = this.cryptoRepository.hashSha256(token);
 

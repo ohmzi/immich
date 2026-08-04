@@ -369,6 +369,12 @@ export enum UserMetadataKey {
   Preferences = 'preferences',
   License = 'license',
   Onboarding = 'onboarding',
+  /**
+   * Bcrypt hash for a self sign-up account awaiting approval. Held here rather than in
+   * `user.password` so the account is unauthenticatable under any build — upstream's login
+   * rejects an empty `user.password` outright. Moved into `user.password` on approval.
+   */
+  PendingPassword = 'pending-password',
 }
 
 export const UserMetadataKeySchema = z
@@ -400,6 +406,8 @@ export const UserAvatarColorSchema = z
 
 export enum UserStatus {
   Active = 'active',
+  /** Self sign-up account awaiting admin approval. Cannot authenticate. */
+  Pending = 'pending',
   Removing = 'removing',
   Deleted = 'deleted',
 }

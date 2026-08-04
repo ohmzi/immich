@@ -3,8 +3,9 @@ import { DateTime } from 'luxon';
 import { SALT_ROUNDS } from 'src/constants';
 import { UserAdmin } from 'src/database';
 import { AuthDto, SignUpDto } from 'src/dtos/auth.dto';
-import { AuthType, Permission } from 'src/enum';
+import { AuthType, Permission, UserMetadataKey, UserStatus } from 'src/enum';
 import { AuthService } from 'src/services/auth.service';
+import { PendingApprovalException } from 'src/utils/exceptions';
 import { UserMetadataItem } from 'src/types';
 import { ApiKeyFactory } from 'test/factories/api-key.factory';
 import { AuthFactory } from 'test/factories/auth.factory';
@@ -87,6 +88,105 @@ describe(AuthService.name, () => {
       });
 
       expect(mocks.user.getByEmail).toHaveBeenCalledTimes(1);
+    });
+
+    it('should report a pending account when the credentials are correct', async () => {
+      const user = UserFactory.create({ password: null, status: UserStatus.Pending });
+      mocks.user.getByEmail.mockResolvedValue(user);
+      mocks.user.getMetadataByKey.mockResolvedValue({ hash: 'pending-hash' });
+
+      await expect(sut.login(dto, loginDetails)).rejects.toBeInstanceOf(PendingApprovalException);
+
+      // the hash lives in metadata, not user.password, so the account cannot log in on any build
+      expect(mocks.crypto.compareBcrypt).toHaveBeenCalledWith('password', 'pending-hash');
+      expect(mocks.session.create).not.toHaveBeenCalled();
+    });
+
+    it('should carry a machine-readable code on the pending response', async () => {
+      const user = UserFactory.create({ password: null, status: UserStatus.Pending });
+      mocks.user.getByEmail.mockResolvedValue(user);
+      mocks.user.getMetadataByKey.mockResolvedValue({ hash: 'pending-hash' });
+
+      await expect(sut.login(dto, loginDetails)).rejects.toMatchObject({
+        response: { message: 'Account pending approval', code: 'pending_approval' },
+      });
+    });
+
+    it('should not reveal a pending account when the password is wrong', async () => {
+      const user = UserFactory.create({ password: null, status: UserStatus.Pending });
+      mocks.user.getByEmail.mockResolvedValue(user);
+      mocks.user.getMetadataByKey.mockResolvedValue({ hash: 'pending-hash' });
+      mocks.crypto.compareBcrypt.mockReturnValue(false);
+
+      await expect(sut.login(dto, loginDetails)).rejects.toBeInstanceOf(UnauthorizedException);
+    });
+
+    it('should reject a pending account that has lost its stored credentials', async () => {
+      const user = UserFactory.create({ password: null, status: UserStatus.Pending });
+      mocks.user.getByEmail.mockResolvedValue(user);
+      mocks.user.getMetadataByKey.mockResolvedValue(void 0);
+
+      await expect(sut.login(dto, loginDetails)).rejects.toBeInstanceOf(UnauthorizedException);
+    });
+
+    it('should refuse to create a session for a non-active account', async () => {
+      // defence in depth: login() should never reach here for a pending user, but
+      // createLoginResponse is the single choke point for password and OAuth alike
+      const user = UserFactory.create({ password: 'immich_password', status: UserStatus.Removing });
+      mocks.user.getByEmail.mockResolvedValue(user);
+
+      await expect(sut.login(dto, loginDetails)).rejects.toBeInstanceOf(UnauthorizedException);
+      expect(mocks.session.create).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('signUp', () => {
+    const signUpDto: SignUpDto = { email, password: 'password', name: 'Test User' };
+
+    it('should throw an error if sign up is disabled', async () => {
+      mocks.systemMetadata.get.mockResolvedValue({ signUp: { enabled: false, defaultQuota: 200 } });
+
+      await expect(sut.signUp(signUpDto, loginDetails)).rejects.toBeInstanceOf(BadRequestException);
+      expect(mocks.user.create).not.toHaveBeenCalled();
+    });
+
+    it('should create a pending account with a null password and the hash in metadata', async () => {
+      const user = UserFactory.create({ status: UserStatus.Pending });
+      mocks.systemMetadata.get.mockResolvedValue({ signUp: { enabled: true, defaultQuota: 200 } });
+      mocks.user.getByEmail.mockResolvedValue(void 0);
+      mocks.user.getAdmin.mockResolvedValue(UserFactory.create({ isAdmin: true }));
+      mocks.user.create.mockResolvedValue(user);
+      mocks.crypto.hashBcrypt.mockResolvedValue('hashed-password');
+
+      await expect(sut.signUp(signUpDto, loginDetails)).resolves.toEqual({ requiresApproval: true });
+
+      expect(mocks.crypto.hashBcrypt).toHaveBeenCalledWith('password', SALT_ROUNDS);
+      expect(mocks.user.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          email,
+          name: 'Test User',
+          password: null,
+          isAdmin: false,
+          status: UserStatus.Pending,
+          shouldChangePassword: false,
+          quotaSizeInBytes: 200 * 2 ** 30,
+        }),
+      );
+      expect(mocks.user.upsertMetadata).toHaveBeenCalledWith(user.id, {
+        key: UserMetadataKey.PendingPassword,
+        value: { hash: 'hashed-password' },
+      });
+    });
+
+    it('should allow an unlimited quota', async () => {
+      mocks.systemMetadata.get.mockResolvedValue({ signUp: { enabled: true, defaultQuota: null } });
+      mocks.user.getByEmail.mockResolvedValue(void 0);
+      mocks.user.getAdmin.mockResolvedValue(UserFactory.create({ isAdmin: true }));
+      mocks.user.create.mockResolvedValue(UserFactory.create({ status: UserStatus.Pending }));
+
+      await sut.signUp(signUpDto, loginDetails);
+
+      expect(mocks.user.create).toHaveBeenCalledWith(expect.objectContaining({ quotaSizeInBytes: null }));
     });
   });
 
