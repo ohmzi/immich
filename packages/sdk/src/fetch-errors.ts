@@ -11,6 +11,8 @@ export interface ApiExceptionResponse {
   error?: string;
   statusCode: number;
   errors?: ApiValidationError[];
+  /** Machine-readable discriminator for errors the client needs to branch on, e.g. `pending_approval`. */
+  code?: string;
 }
 
 export interface ApiHttpError extends HttpError {

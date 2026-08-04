@@ -5,7 +5,7 @@
   import { getUserAdminActions, getUserAdminsActions } from '$lib/services/user-admin.service';
   import { locale } from '$lib/stores/preferences.store';
   import { getByteUnitString } from '$lib/utils/byte-units';
-  import { searchUsersAdmin, type UserAdminResponseDto } from '@immich/sdk';
+  import { searchUsersAdmin, UserStatus, type UserAdminResponseDto } from '@immich/sdk';
   import {
     CommandPaletteDefaultProvider,
     Container,
@@ -19,6 +19,7 @@
     TableHeader,
     TableHeading,
     TableRow,
+    Text,
   } from '@immich/ui';
   import { mdiInfinity } from '@mdi/js';
   import type { Snippet } from 'svelte';
@@ -49,9 +50,23 @@
 
   const { Create } = $derived(getUserAdminsActions($t));
 
+  // Accounts awaiting approval sort to the top so they read as a to-do without needing a
+  // separate section — the row colour and the Approve/Reject actions carry the rest.
+  const sortedUsers = $derived([
+    ...users.filter((user) => user.status === UserStatus.Pending),
+    ...users.filter((user) => user.status !== UserStatus.Pending),
+  ]);
+
+  const getRowColor = (user: UserAdminResponseDto) => {
+    if (user.deletedAt) {
+      return 'danger';
+    }
+    return user.status === UserStatus.Pending ? 'warning' : undefined;
+  };
+
   const getActionsForUser = (user: UserAdminResponseDto) => {
-    const { Detail, Update, Delete, ResetPassword, ResetPinCode } = getUserAdminActions($t, user);
-    return [Detail, Update, ResetPassword, ResetPinCode, MenuItemType.Divider, Delete];
+    const { Detail, Update, Delete, ResetPassword, ResetPinCode, Approve, Reject } = getUserAdminActions($t, user);
+    return [Approve, Detail, Update, ResetPassword, ResetPinCode, MenuItemType.Divider, Reject, Delete];
   };
 
   const classes = {
@@ -82,10 +97,13 @@
       </TableHeader>
 
       <TableBody>
-        {#each users as user (user.id)}
-          <TableRow color={user.deletedAt ? 'danger' : undefined}>
+        {#each sortedUsers as user (user.id)}
+          <TableRow color={getRowColor(user)}>
             <TableCell class={classes.column1}>
               <Link href={Route.viewUser(user)}>{user.name}</Link>
+              {#if user.status === UserStatus.Pending}
+                <Text size="tiny" color="muted">{$t('admin.awaiting_approval')}</Text>
+              {/if}
             </TableCell>
             <TableCell class={classes.column2}>{user.email}</TableCell>
             <TableCell class={classes.column3}>

@@ -26,6 +26,8 @@ export class UserAdminService extends BaseService {
     const users = await this.userRepository.getList({
       id: dto.id,
       withDeleted: dto.withDeleted,
+      // admins need to see sign-ups awaiting approval in order to action them
+      withPending: true,
     });
     return users.map((user) => mapUserAdmin(user));
   }
@@ -117,6 +119,29 @@ export class UserAdminService extends BaseService {
     return mapUserAdmin(user);
   }
 
+  async approve(auth: AuthDto, id: string): Promise<UserAdminResponseDto> {
+    const pending = await this.findPendingOrFail(id);
+
+    // The chosen password has been parked in metadata since sign-up; promote it to the real
+    // column and drop the copy, so the account becomes indistinguishable from an admin-created one.
+    const secret = await this.userRepository.getMetadataByKey(pending.id, UserMetadataKey.PendingPassword);
+    if (!secret?.hash) {
+      throw new BadRequestException('Pending account is missing its credentials and cannot be approved');
+    }
+
+    const user = await this.userRepository.update(id, { status: UserStatus.Active, password: secret.hash });
+    await this.userRepository.deleteMetadata(id, UserMetadataKey.PendingPassword);
+
+    return mapUserAdmin(user);
+  }
+
+  async reject(auth: AuthDto, id: string): Promise<void> {
+    await this.findPendingOrFail(id);
+    // Safe as a hard delete precisely because the account was never able to authenticate, so it
+    // owns no assets, albums, sessions or keys. Never loosen the pending guard above.
+    await this.userRepository.delete({ id }, true);
+  }
+
   async restore(auth: AuthDto, id: string): Promise<UserAdminResponseDto> {
     await this.findOrFail(id, { withDeleted: true });
     await this.albumRepository.restoreAll(id);
@@ -161,5 +186,13 @@ export class UserAdminService extends BaseService {
 
   private findOrFail(id: string, options: UserFindOptions) {
     return findOrFail(() => this.userRepository.get(id, options), 'User');
+  }
+
+  private async findPendingOrFail(id: string) {
+    const user = await this.findOrFail(id, {});
+    if (user.status !== UserStatus.Pending) {
+      throw new BadRequestException('User is not pending approval');
+    }
+    return user;
   }
 }

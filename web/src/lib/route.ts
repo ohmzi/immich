@@ -40,7 +40,7 @@ const asQueryString = (
 
 export const Route = {
   // auth
-  login: (params?: { continue?: string; autoLaunch?: 0 | 1 }) => '/auth/login' + asQueryString(params),
+  login: (params?: { continue?: string; autoLaunch?: 0 | 1; mode?: 'create' }) => '/auth/login' + asQueryString(params),
   logout: (params?: { continue?: string }) => '/auth/logout' + asQueryString(params),
   register: () => '/auth/register',
   changePassword: () => '/auth/change-password',

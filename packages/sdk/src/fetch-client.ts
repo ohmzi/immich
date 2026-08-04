@@ -373,6 +373,12 @@ export type AdminConfigServerDto = {
     /** Public users */
     publicUsers: boolean;
 };
+export type AdminConfigSignUpDto = {
+    /** Default storage quota (GiB) */
+    defaultQuota: number | null;
+    /** Enabled */
+    enabled: boolean;
+};
 export type AdminConfigStorageTemplateDto = {
     /** Enabled */
     enabled: boolean;
@@ -424,6 +430,7 @@ export type AdminConfigDto = {
     passwordLogin: AdminConfigPasswordLoginDto;
     reverseGeocoding: AdminConfigReverseGeocodingDto;
     server: AdminConfigServerDto;
+    signUp: AdminConfigSignUpDto;
     storageTemplate: AdminConfigStorageTemplateDto;
     templates: AdminConfigTemplatesDto;
     theme: AdminConfigThemeDto;
@@ -1511,6 +1518,10 @@ export type SessionUnlockDto = {
     /** New PIN code (4-6 digits) */
     pinCode?: string;
 };
+export type SignUpResponseDto = {
+    /** Whether the account must be approved by an administrator before it can be used */
+    requiresApproval: boolean;
+};
 export type AuthStatusResponseDto = {
     /** Session expiration date */
     expiresAt?: string;
@@ -1623,6 +1634,10 @@ export type UserConfigServerDto = {
     /** Public users */
     publicUsers: boolean;
 };
+export type UserConfigSignUpDto = {
+    /** Enabled */
+    enabled: boolean;
+};
 export type UserConfigThemeDto = {
     /** Custom CSS for theming */
     customCss: string;
@@ -1646,6 +1661,7 @@ export type UserConfigDto = {
     passwordLogin: UserConfigPasswordLoginDto;
     reverseGeocoding: UserConfigReverseGeocodingDto;
     server: UserConfigServerDto;
+    signUp: UserConfigSignUpDto;
     theme: UserConfigThemeDto;
     trash: UserConfigTrashDto;
     user: UserConfigUserDto;
@@ -2188,6 +2204,10 @@ export type PublicConfigServerDto = {
     /** Login page message */
     loginPageMessage: string;
 };
+export type PublicConfigSignUpDto = {
+    /** Enabled */
+    enabled: boolean;
+};
 export type PublicConfigThemeDto = {
     /** Custom CSS for theming */
     customCss: string;
@@ -2196,6 +2216,7 @@ export type PublicConfigDto = {
     oauth: PublicConfigOAuthDto;
     passwordLogin: PublicConfigPasswordLoginDto;
     server: PublicConfigServerDto;
+    signUp: PublicConfigSignUpDto;
     theme: PublicConfigThemeDto;
 };
 export type QueueResponseDto = {
@@ -2836,6 +2857,8 @@ export type ServerFeaturesDto = {
     search: boolean;
     /** Whether sidecar files are supported */
     sidecar: boolean;
+    /** Whether self sign-up is enabled */
+    signUp: boolean;
     /** Whether smart search is enabled */
     smartSearch: boolean;
     /** Whether trash feature is enabled */
@@ -4270,6 +4293,20 @@ export function updateUserAdmin({ id, userAdminUpdateDto }: {
     })));
 }
 /**
+ * Approve a pending user
+ */
+export function approveUserAdmin({ id }: {
+    id: string;
+}, opts?: Oazapfts.RequestOpts) {
+    return oazapfts.ok(oazapfts.fetchJson<{
+        status: 200;
+        data: UserAdminResponseDto;
+    }>(`/admin/users/${encodeURIComponent(id)}/approve`, {
+        ...opts,
+        method: "POST"
+    }));
+}
+/**
  * Retrieve calendar heatmap activity
  */
 export function getUserCalendarHeatmapAdmin({ $from, id, to, $type }: {
@@ -4317,6 +4354,17 @@ export function updateUserPreferencesAdmin({ id, userPreferencesUpdateDto }: {
         method: "PUT",
         body: userPreferencesUpdateDto
     })));
+}
+/**
+ * Reject a pending user
+ */
+export function rejectUserAdmin({ id }: {
+    id: string;
+}, opts?: Oazapfts.RequestOpts) {
+    return oazapfts.ok(oazapfts.fetchText(`/admin/users/${encodeURIComponent(id)}/reject`, {
+        ...opts,
+        method: "POST"
+    }));
 }
 /**
  * Restore a deleted user
@@ -5251,6 +5299,21 @@ export function unlockAuthSession({ sessionUnlockDto }: {
         ...opts,
         method: "POST",
         body: sessionUnlockDto
+    })));
+}
+/**
+ * Sign up
+ */
+export function signUp({ signUpDto }: {
+    signUpDto: SignUpDto;
+}, opts?: Oazapfts.RequestOpts) {
+    return oazapfts.ok(oazapfts.fetchJson<{
+        status: 201;
+        data: SignUpResponseDto;
+    }>("/auth/sign-up", oazapfts.json({
+        ...opts,
+        method: "POST",
+        body: signUpDto
     })));
 }
 /**
@@ -8082,6 +8145,7 @@ export enum NotificationType {
 }
 export enum UserStatus {
     Active = "active",
+    Pending = "pending",
     Removing = "removing",
     Deleted = "deleted"
 }
@@ -8635,5 +8699,6 @@ export enum ReleaseType {
 export enum UserMetadataKey {
     Preferences = "preferences",
     License = "license",
-    Onboarding = "onboarding"
+    Onboarding = "onboarding",
+    PendingPassword = "pending-password"
 }

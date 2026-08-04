@@ -142,6 +142,7 @@ const ServerFeaturesSchema = z
     oauth: z.boolean().describe('Whether OAuth is enabled'),
     oauthAutoLaunch: z.boolean().describe('Whether OAuth auto-launch is enabled'),
     passwordLogin: z.boolean().describe('Whether password login is enabled'),
+    signUp: z.boolean().describe('Whether self sign-up is enabled'),
     sidecar: z.boolean().describe('Whether sidecar files are supported'),
     search: z.boolean().describe('Whether search is enabled'),
     email: z.boolean().describe('Whether email notifications are enabled'),

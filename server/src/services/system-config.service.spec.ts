@@ -180,6 +180,10 @@ const updatedConfig = Object.freeze<SystemConfig>({
   passwordLogin: {
     enabled: true,
   },
+  signUp: {
+    enabled: false,
+    defaultQuota: 200,
+  },
   server: {
     externalDomain: '',
     loginPageMessage: '',

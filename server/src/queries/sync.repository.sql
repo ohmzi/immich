@@ -1195,6 +1195,7 @@ from
 where
   "user"."updateId" < $1
   and "user"."updateId" > $2
+  and "user"."status" != $3
 order by
   "user"."updateId" asc
 

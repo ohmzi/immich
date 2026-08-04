@@ -325,6 +325,12 @@ const AdminConfigSchemaWithVisibility = z
     passwordLogin: z
       .object({ enabled: configBool.describe('Enabled').meta({ visibility: Public }) })
       .meta({ id: 'AdminConfigPasswordLoginDto' }),
+    signUp: z
+      .object({
+        enabled: configBool.describe('Enabled').meta({ visibility: Public }),
+        defaultQuota: z.int().min(0).nullable().describe('Default storage quota (GiB)'),
+      })
+      .meta({ id: 'AdminConfigSignUpDto' }),
     storageTemplate: z
       .object({
         enabled: configBool.describe('Enabled'),
@@ -686,6 +692,10 @@ export const defaults = Object.freeze<SystemConfig>({
   },
   passwordLogin: {
     enabled: true,
+  },
+  signUp: {
+    enabled: false,
+    defaultQuota: 200,
   },
   storageTemplate: {
     enabled: false,

@@ -29,6 +29,12 @@
   };
 
   const onBeforeSave = async () => {
+    // sign-up creates password-backed accounts, so it cannot outlive password login
+    if (configToEdit.signUp.enabled && !configToEdit.passwordLogin.enabled) {
+      toastManager.danger($t('admin.sign_up_requires_password_login'));
+      return false;
+    }
+
     const allMethodsDisabled = !configToEdit.oauth.enabled && !configToEdit.passwordLogin.enabled;
 
     if (allMethodsDisabled) {
@@ -315,7 +321,34 @@
           </div>
         </SettingAccordion>
 
-        <SettingButtonsRow bind:configToEdit keys={['passwordLogin', 'oauth']} {onBeforeSave} {disabled} />
+        <SettingAccordion
+          key="sign-up"
+          title={$t('admin.sign_up_settings')}
+          subtitle={$t('admin.sign_up_settings_description')}
+        >
+          <div class="ms-4 mt-4 flex flex-col gap-4">
+            <SettingSwitch
+              title={$t('admin.sign_up_enable_description')}
+              subtitle={$t('admin.sign_up_enable_subtitle')}
+              disabled={disabled || !configToEdit.passwordLogin.enabled}
+              bind:checked={configToEdit.signUp.enabled}
+            />
+
+            {#if configToEdit.signUp.enabled}
+              <SettingInputField
+                inputType={SettingInputFieldType.NUMBER}
+                label={$t('admin.sign_up_default_quota')}
+                description={$t('admin.sign_up_default_quota_description')}
+                bind:value={configToEdit.signUp.defaultQuota}
+                required={false}
+                {disabled}
+                isEdited={configToEdit.signUp.defaultQuota !== config.signUp.defaultQuota}
+              />
+            {/if}
+          </div>
+        </SettingAccordion>
+
+        <SettingButtonsRow bind:configToEdit keys={['passwordLogin', 'oauth', 'signUp']} {onBeforeSave} {disabled} />
       </div>
     </form>
   </div>
