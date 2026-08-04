@@ -5,6 +5,7 @@ import { DateTime } from 'luxon';
 import { InjectKysely } from 'nestjs-kysely';
 import { columns } from 'src/database';
 import { DummyValue, GenerateSql } from 'src/decorators';
+import { UserStatus } from 'src/enum';
 import { DB } from 'src/schema';
 import { SessionTable } from 'src/schema/tables/session.table';
 import { asUuid } from 'src/utils/database';
@@ -56,7 +57,9 @@ export class SessionRepository {
             .selectFrom('user')
             .select(columns.authUser)
             .whereRef('user.id', '=', 'session.userId')
-            .where('user.deletedAt', 'is', null),
+            .where('user.deletedAt', 'is', null)
+            // fail closed: only an active account may carry a session
+            .where('user.status', '=', UserStatus.Active),
         ).as('user'),
       ])
       .where('session.token', '=', token)

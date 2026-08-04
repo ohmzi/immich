@@ -1712,6 +1712,59 @@
         "x-immich-state": "Deprecated"
       }
     },
+    "/admin/users/{id}/approve": {
+      "post": {
+        "description": "Approve a self sign-up account so that it can log in.",
+        "operationId": "approveUserAdmin",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserAdminResponseDto"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          },
+          {
+            "api_key": []
+          }
+        ],
+        "summary": "Approve a pending user",
+        "tags": [
+          "Users (admin)"
+        ],
+        "x-immich-admin-only": true,
+        "x-immich-history": [
+          {
+            "version": "v3.1.0",
+            "state": "Added"
+          }
+        ],
+        "x-immich-permission": "adminUser.update"
+      }
+    },
     "/admin/users/{id}/calendar-heatmap": {
       "get": {
         "description": "Retrieve activity counts for a specified period, in a calendar heatmap format.",
@@ -1940,6 +1993,52 @@
         ],
         "x-immich-permission": "adminUser.update",
         "x-immich-state": "Deprecated"
+      }
+    },
+    "/admin/users/{id}/reject": {
+      "post": {
+        "description": "Permanently delete a self sign-up account that is awaiting approval.",
+        "operationId": "rejectUserAdmin",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          },
+          {
+            "cookie": []
+          },
+          {
+            "api_key": []
+          }
+        ],
+        "summary": "Reject a pending user",
+        "tags": [
+          "Users (admin)"
+        ],
+        "x-immich-admin-only": true,
+        "x-immich-history": [
+          {
+            "version": "v3.1.0",
+            "state": "Added"
+          }
+        ],
+        "x-immich-permission": "adminUser.delete"
       }
     },
     "/admin/users/{id}/restore": {
@@ -6019,6 +6118,45 @@
           }
         ],
         "x-immich-state": "Stable"
+      }
+    },
+    "/auth/sign-up": {
+      "post": {
+        "description": "Register a new account, pending administrator approval.",
+        "operationId": "signUp",
+        "parameters": [],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SignUpDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SignUpResponseDto"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "summary": "Sign up",
+        "tags": [
+          "Authentication"
+        ],
+        "x-immich-history": [
+          {
+            "version": "v3.1.0",
+            "state": "Added"
+          }
+        ]
       }
     },
     "/auth/status": {
@@ -18312,6 +18450,9 @@
           "server": {
             "$ref": "#/components/schemas/AdminConfigServerDto"
           },
+          "signUp": {
+            "$ref": "#/components/schemas/AdminConfigSignUpDto"
+          },
           "storageTemplate": {
             "$ref": "#/components/schemas/AdminConfigStorageTemplateDto"
           },
@@ -18346,6 +18487,7 @@
           "passwordLogin",
           "reverseGeocoding",
           "server",
+          "signUp",
           "storageTemplate",
           "templates",
           "theme",
@@ -19248,6 +19390,26 @@
           "externalDomain",
           "loginPageMessage",
           "publicUsers"
+        ],
+        "type": "object"
+      },
+      "AdminConfigSignUpDto": {
+        "properties": {
+          "defaultQuota": {
+            "description": "Default storage quota (GiB)",
+            "maximum": 9007199254740991,
+            "minimum": 0,
+            "nullable": true,
+            "type": "integer"
+          },
+          "enabled": {
+            "description": "Enabled",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "defaultQuota",
+          "enabled"
         ],
         "type": "object"
       },
@@ -25324,6 +25486,9 @@
           "server": {
             "$ref": "#/components/schemas/PublicConfigServerDto"
           },
+          "signUp": {
+            "$ref": "#/components/schemas/PublicConfigSignUpDto"
+          },
           "theme": {
             "$ref": "#/components/schemas/PublicConfigThemeDto"
           }
@@ -25332,6 +25497,7 @@
           "oauth",
           "passwordLogin",
           "server",
+          "signUp",
           "theme"
         ],
         "type": "object"
@@ -25379,6 +25545,18 @@
         },
         "required": [
           "loginPageMessage"
+        ],
+        "type": "object"
+      },
+      "PublicConfigSignUpDto": {
+        "properties": {
+          "enabled": {
+            "description": "Enabled",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "enabled"
         ],
         "type": "object"
       },
@@ -27238,6 +27416,10 @@
             "description": "Whether sidecar files are supported",
             "type": "boolean"
           },
+          "signUp": {
+            "description": "Whether self sign-up is enabled",
+            "type": "boolean"
+          },
           "smartSearch": {
             "description": "Whether smart search is enabled",
             "type": "boolean"
@@ -27262,6 +27444,7 @@
           "reverseGeocoding",
           "search",
           "sidecar",
+          "signUp",
           "smartSearch",
           "trash"
         ],
@@ -27919,6 +28102,18 @@
           "email",
           "name",
           "password"
+        ],
+        "type": "object"
+      },
+      "SignUpResponseDto": {
+        "properties": {
+          "requiresApproval": {
+            "description": "Whether the account must be approved by an administrator before it can be used",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "requiresApproval"
         ],
         "type": "object"
       },
@@ -32259,6 +32454,9 @@
           "server": {
             "$ref": "#/components/schemas/UserConfigServerDto"
           },
+          "signUp": {
+            "$ref": "#/components/schemas/UserConfigSignUpDto"
+          },
           "theme": {
             "$ref": "#/components/schemas/UserConfigThemeDto"
           },
@@ -32278,6 +32476,7 @@
           "passwordLogin",
           "reverseGeocoding",
           "server",
+          "signUp",
           "theme",
           "trash",
           "user"
@@ -32531,6 +32730,18 @@
         ],
         "type": "object"
       },
+      "UserConfigSignUpDto": {
+        "properties": {
+          "enabled": {
+            "description": "Enabled",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "enabled"
+        ],
+        "type": "object"
+      },
       "UserConfigThemeDto": {
         "properties": {
           "customCss": {
@@ -32607,7 +32818,8 @@
         "enum": [
           "preferences",
           "license",
-          "onboarding"
+          "onboarding",
+          "pending-password"
         ],
         "type": "string"
       },
@@ -32755,6 +32967,7 @@
         "description": "User status",
         "enum": [
           "active",
+          "pending",
           "removing",
           "deleted"
         ],

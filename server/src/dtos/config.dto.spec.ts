@@ -15,6 +15,7 @@ const PUBLIC_PROPERTIES = [
   'oauth.enabled',
   'passwordLogin.enabled',
   'server.loginPageMessage',
+  'signUp.enabled',
   'theme.customCss',
 ];
 

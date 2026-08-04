@@ -3,6 +3,7 @@ import { Kysely, sql } from 'kysely';
 import { InjectKysely } from 'nestjs-kysely';
 import { columns } from 'src/database';
 import { DummyValue, GenerateSql } from 'src/decorators';
+import { UserStatus } from 'src/enum';
 import { DB } from 'src/schema';
 import { SyncAck } from 'src/types';
 
@@ -757,7 +758,12 @@ class UserSync extends BaseSync {
 
   @GenerateSql({ params: [dummyQueryOptions], stream: true })
   getUpserts(options: SyncQueryOptions) {
-    return this.upsertQuery('user', options).select(columns.syncUser).stream();
+    // Accounts awaiting approval must not be streamed to clients. The approval UPDATE bumps
+    // `updateId`, so they start syncing normally the moment they are approved.
+    return this.upsertQuery('user', options)
+      .where('user.status', '!=', UserStatus.Pending)
+      .select(columns.syncUser)
+      .stream();
   }
 }
 
