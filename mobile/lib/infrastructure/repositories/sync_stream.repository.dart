@@ -737,11 +737,15 @@ class SyncStreamRepository extends DatabaseAccessor<Drift> with $SyncStreamRepos
     try {
       await _db.batch((batch) {
         for (final userMetadata in data) {
+          final key = userMetadata.key.toUserMetadataKey();
+          if (key == null) {
+            continue;
+          }
           final companion = UserMetadataEntityCompanion(value: Value(userMetadata.value as Map<String, Object?>));
 
           batch.insert(
             _db.userMetadataEntity,
-            companion.copyWith(userId: Value(userMetadata.userId), key: Value(userMetadata.key.toUserMetadataKey())),
+            companion.copyWith(userId: Value(userMetadata.userId), key: Value(key)),
             onConflict: DoUpdate((_) => companion),
           );
         }
@@ -756,11 +760,15 @@ class SyncStreamRepository extends DatabaseAccessor<Drift> with $SyncStreamRepos
     try {
       await _db.batch((batch) {
         for (final userMetadata in data) {
+          final key = userMetadata.key.toUserMetadataKey();
+          if (key == null) {
+            continue;
+          }
           batch.delete(
             _db.userMetadataEntity,
             UserMetadataEntityCompanion(
               userId: Value(userMetadata.userId),
-              key: Value(userMetadata.key.toUserMetadataKey()),
+              key: Value(key),
             ),
           );
         }
@@ -974,10 +982,11 @@ extension on api.AssetVisibility {
 }
 
 extension on api.UserMetadataKey {
-  UserMetadataKey toUserMetadataKey() => switch (this) {
+  UserMetadataKey? toUserMetadataKey() => switch (this) {
     api.UserMetadataKey.onboarding => UserMetadataKey.onboarding,
     api.UserMetadataKey.preferences => UserMetadataKey.preferences,
     api.UserMetadataKey.license => UserMetadataKey.license,
+    api.UserMetadataKey.pendingPassword => null,
   };
 }
 
